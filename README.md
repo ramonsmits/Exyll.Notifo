@@ -12,4 +12,4 @@ The following  sample is also included in the (xml) documentation.
         "http://maps.google.com/maps?q=Rotterdam,Netherlands",
         "Demo");
 
-Any suggestions are welcome at notifo@ramonsmits.com
+Any suggestions are welcome at notifo@ramonsmits.com or @ramonsmits
