@@ -52,6 +52,7 @@ namespace Exyll.Notifications
     {
         const string BaseUrl = "https://api.notifo.com/v1/";
         const string SendNotificationUrl = BaseUrl + "send_notification";
+        const string SubscribeUserUrl = BaseUrl + "subscribe_user";
         readonly DataContractJsonSerializer _notifoResultSerializer = new DataContractJsonSerializer(typeof(send_notification_result));
         readonly string _authorizationHeaderValue;
 
@@ -96,41 +97,105 @@ namespace Exyll.Notifications
             if (string.IsNullOrEmpty(to)) throw new ArgumentNullException("to");
             if (string.IsNullOrEmpty(msg)) throw new ArgumentNullException("msg");
 
-            var request = (HttpWebRequest)WebRequest.Create(SendNotificationUrl);
+            var request = PrepareRequest(SendNotificationUrl);
+
+            var fields = new Dictionary<string, string>()
+            {
+                { "to", to },
+                { "msg", msg },
+                { "title", title },
+                { "uri", uri },
+                { "label", label },
+            };
+
+            WriteValues(request, fields);
+
+            var response = request.GetResponse();
+
+            if (!ProcessResponse(response))
+                throw new Exception("Send notification failed.");
+        }
+
+        /// <summary>
+        /// Send a subscribe user message and waits until the message has been transmitted to the notifo server.
+        /// </summary>
+        /// <param name="username">The notifo user account to subscribe.</param>
+        public void SubscribeUser(string username)
+        {
+            if (string.IsNullOrEmpty(username)) throw new ArgumentNullException("username");
+
+            var request = PrepareRequest(SubscribeUserUrl);
+
+            var fields = new Dictionary<string, string>()
+            {
+                { "username", username }
+            };
+
+            WriteValues(request, fields);
+
+            var response = request.GetResponse();
+
+            if (!ProcessResponse(response))
+                throw new Exception("Subscribe user failed.");
+        }
+
+        /// <summary>
+        /// Makes sure that the value that is supplied can be user on an URL.
+        /// </summary>
+        /// <param name="value">The non escaped string value</param>
+        /// <returns>Escaped string value to be used in a url</returns>
+        string Escape(string @value)
+        {
+            return Uri.EscapeDataString(@value);
+        }
+
+        /// <summary>
+        /// Initializes a http request to be send to the notifo server.
+        /// </summary>
+        /// <param name="url">The url to post to.</param>
+        /// <returns>An initialized http web request.</returns>
+        HttpWebRequest PrepareRequest(string url)
+        {
+            var request = (HttpWebRequest)WebRequest.Create(url);
             request.Method = "POST";
             request.Headers.Add("Authorization", _authorizationHeaderValue);
             request.ContentType = "application/x-www-form-urlencoded";
             request.Accept = "application/json, text/json";
+            return request;
+        }
 
-            var requestStream = request.GetRequestStream();
-
-            using (var requestStreamWriter = new StreamWriter(requestStream))
-            {
-                requestStreamWriter.Write(
-                    @"to={0}&msg={1}&title={2}&uri={3}&label={4}",
-                    Escape(to),     // 0
-                    Escape(msg),    // 1
-                    Escape(title),  // 2
-                    Escape(uri),    // 3
-                    Escape(label)   // 4
-                    );
-            }
-
-            var response = request.GetResponse();
-
+        /// <summary>
+        /// Processes the web response to check if the message has been transmitted succesfully.
+        /// </summary>
+        /// <param name="response">A web response returned from the notifo api webserver.</param>
+        /// <returns>True if everything is ok.</returns>
+        bool ProcessResponse(WebResponse response)
+        {
             using (var responseStream = response.GetResponseStream())
             {
                 var result = (send_notification_result)_notifoResultSerializer.ReadObject(responseStream);
-                if (result.response_code != 2201)
-                {
-                    throw new Exception("Send notification failed. Reason: " + result.response_code);
-                }
+                return result.response_code == 2201 || result.response_code == 2202;
             }
         }
 
-        string Escape(string @value)
+        /// <summary>
+        /// Writes the given key/value items to the web request.
+        /// </summary>
+        /// <param name="request">Web request to use</param>
+        /// <param name="values">Key/value items to write</param>
+        void WriteValues(WebRequest request, IDictionary<string, string> values)
         {
-            return Uri.EscapeDataString(@value);
+            using (var requestStream = request.GetRequestStream())
+            using (var writer = new StreamWriter(requestStream))
+            {
+                foreach (var v in values)
+                {
+                    writer.Write(v.Key);
+                    writer.Write("=");
+                    writer.Write(Escape(v.Value));
+                    writer.Write("&");
+                }
+            }
         }
     }
 }
