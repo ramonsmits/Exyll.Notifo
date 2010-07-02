@@ -190,6 +190,9 @@ namespace Exyll.Notifications
             {
                 foreach (var v in values)
                 {
+					if(string.IsNullOrEmpty(v.Value))
+						continue;
+						
                     writer.Write(v.Key);
                     writer.Write("=");
                     writer.Write(Escape(v.Value));
